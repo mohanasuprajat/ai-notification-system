@@ -3,7 +3,7 @@ const path = require("path");
 require("dotenv").config({
   path: path.resolve(__dirname, "../../.env"),
 });
-console.log("ENV CHECK:", process.env.TOGETHER_API_KEY);
+// console.log("ENV CHECK:", process.env.TOGETHER_API_KEY);
 const { Together } = require("together-ai");
 
 const client = new Together({
