@@ -1,8 +1,13 @@
 import React from "react";
 import Dashboard from "./pages/Dashboard";
+import { NotificationProvider } from "./context/NotificationContext";
 
 function App() {
-  return <Dashboard />;
+  return (
+    <NotificationProvider>
+      <Dashboard />
+    </NotificationProvider>
+  );
 }
 
 export default App;

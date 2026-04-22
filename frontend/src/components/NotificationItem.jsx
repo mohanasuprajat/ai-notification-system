@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 
-const getColor = (priority) => {
-    if (priority === "HIGH") return "#ff4d4f";
-    if (priority === "MEDIUM") return "#faad14";
-    return "#52c41a";
+const getPriorityStyles = (priority) => {
+    if (priority === "HIGH") return { bg: "rgba(239, 68, 68, 0.2)", color: "#ef4444", border: "#ef4444" };
+    if (priority === "MEDIUM") return { bg: "rgba(245, 158, 11, 0.2)", color: "#f59e0b", border: "#f59e0b" };
+    return { bg: "rgba(16, 185, 129, 0.2)", color: "#10b981", border: "#10b981" };
 };
 
 const NotificationItem = ({
@@ -11,8 +11,10 @@ const NotificationItem = ({
     toggleRead,
     toggleSelect,
     selected,
+    deleteNotification
 }) => {
     const [openMenu, setOpenMenu] = useState(false);
+    const priorityStyle = getPriorityStyles(notification.priority);
 
     return (
         <div
@@ -23,16 +25,33 @@ const NotificationItem = ({
                 gap: "16px",
                 padding: "18px 24px",
                 marginBottom: "16px",
-                background: notification.read ? "#f8fafc" : "#ffffff",
+                // Glassmorphism logic
+                background: notification.read ? "rgba(15, 23, 42, 0.6)" : "rgba(30, 41, 59, 0.7)",
+                backdropFilter: "blur(12px)",
                 borderRadius: "12px",
-                borderLeft: `5px solid ${getColor(notification.priority)}`,
-                boxShadow: notification.read ? "none" : "0 8px 24px rgba(149, 157, 165, 0.12)",
-                border: notification.read ? "1px solid #e2e8f0" : "1px solid transparent",
-                opacity: notification.isSpam ? 0.7 : 1, // 🔥 dim spam
+                borderLeft: `4px solid ${priorityStyle.border}`,
+                border: notification.read ? "1px solid rgba(255, 255, 255, 0.05)" : "1px solid rgba(255, 255, 255, 0.1)",
+                borderLeftWidth: "4px",
+                borderLeftColor: priorityStyle.border,
+                opacity: notification.isSpam ? 0.4 : 1, // Dim spam heavily in dark mode
+                filter: notification.isSpam ? "grayscale(80%) blur(1px)" : "none",
                 transition: "all 0.3s ease",
                 position: "relative",
                 width: "100%",
-                boxSizing: "border-box"
+                boxSizing: "border-box",
+                boxShadow: notification.read ? "none" : "0 8px 24px rgba(0, 0, 0, 0.2)",
+            }}
+            onMouseEnter={(e) => {
+                if (notification.isSpam) {
+                    e.currentTarget.style.opacity = 1;
+                    e.currentTarget.style.filter = "none";
+                }
+            }}
+            onMouseLeave={(e) => {
+                if (notification.isSpam) {
+                    e.currentTarget.style.opacity = 0.4;
+                    e.currentTarget.style.filter = "grayscale(80%) blur(1px)";
+                }
             }}
         >
             {/* Checkbox */}
@@ -40,7 +59,13 @@ const NotificationItem = ({
                 type="checkbox"
                 checked={selected.includes(notification.id)}
                 onChange={() => toggleSelect(notification.id)}
-                style={{ marginTop: "4px" }}
+                style={{
+                    marginTop: "4px",
+                    accentColor: "#38bdf8",
+                    width: "16px",
+                    height: "16px",
+                    cursor: "pointer"
+                }}
             />
 
             {/* Content */}
@@ -51,8 +76,8 @@ const NotificationItem = ({
                 <div
                     style={{
                         fontSize: "15px",
-                        fontWeight: notification.read ? "500" : "600",
-                        color: notification.read ? "#475569" : "#1e293b",
+                        fontWeight: notification.read ? "400" : "500",
+                        color: notification.read ? "#94a3b8" : "#f1f5f9",
                         lineHeight: "1.5"
                     }}
                 >
@@ -62,54 +87,79 @@ const NotificationItem = ({
                 <div
                     style={{
                         fontSize: "12px",
-                        color: "#94a3b8",
-                        marginTop: "6px",
-                        fontWeight: "500"
+                        color: "#64748b",
+                        marginTop: "8px",
+                        fontWeight: "500",
+                        fontFamily: "source-code-pro, Menlo, monospace",
+                        letterSpacing: "0.5px"
                     }}
                 >
                     {new Date(notification.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                 </div>
 
-                {/* 🔥 Confidence (AI transparency) */}
+                {/* AI Confidence Meter */}
                 {notification.confidence !== undefined && (
-                    <div style={{ fontSize: "11px", color: "#aaa" }}>
-                        Confidence: {(notification.confidence * 100).toFixed(0)}%
+                    <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontSize: "11px", color: "#64748b", fontWeight: "600" }}>AI CONFIDENCE</span>
+                        <div style={{ 
+                            flex: 1, 
+                            maxWidth: "150px", 
+                            height: "4px", 
+                            background: "rgba(255,255,255,0.1)", 
+                            borderRadius: "4px",
+                            overflow: "hidden"
+                        }}>
+                            <div style={{
+                                width: `${notification.confidence * 100}%`,
+                                height: "100%",
+                                background: notification.confidence > 0.8 ? "#10b981" : notification.confidence > 0.5 ? "#f59e0b" : "#ef4444",
+                                borderRadius: "4px",
+                                animation: "progress-fill 1s ease-out forwards",
+                                boxShadow: "0 0 8px rgba(255,255,255,0.2)"
+                            }}></div>
+                        </div>
+                        <span style={{ fontSize: "11px", color: "#cbd5e1", fontWeight: "600" }}>
+                            {(notification.confidence * 100).toFixed(0)}%
+                        </span>
                     </div>
                 )}
             </div>
 
             {/* RIGHT SECTION */}
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
 
-                {/* Priority Badge */}
-                <span
-                    style={{
-                        fontSize: "10px",
-                        fontWeight: "600",
-                        padding: "3px 8px",
-                        borderRadius: "12px",
-                        background: getColor(notification.priority),
-                        color: "#fff",
-                    }}
-                >
-                    {notification.priority}
-                </span>
-
-                {/* 🔥 SPAM Badge */}
+                {/* Tracking Badges */}
                 {notification.isSpam && (
                     <span
                         style={{
                             fontSize: "10px",
-                            fontWeight: "600",
-                            padding: "3px 6px",
+                            fontWeight: "700",
+                            padding: "4px 8px",
                             borderRadius: "6px",
-                            background: "#fff1f0",
-                            color: "#ff4d4f",
+                            background: "rgba(239, 68, 68, 0.15)",
+                            color: "#ef4444",
+                            border: "1px solid rgba(239, 68, 68, 0.3)",
+                            letterSpacing: "0.5px"
                         }}
                     >
                         🚨 SPAM
                     </span>
                 )}
+
+                <span
+                    style={{
+                        fontSize: "10px",
+                        fontWeight: "700",
+                        padding: "4px 10px",
+                        borderRadius: "12px",
+                        background: priorityStyle.bg,
+                        color: priorityStyle.color,
+                        border: `1px solid ${priorityStyle.border}40`,
+                        letterSpacing: "0.5px"
+                    }}
+                >
+                    {notification.priority}
+                </span>
 
                 {/* 3 DOT MENU */}
                 <div style={{ position: "relative" }}>
@@ -120,11 +170,20 @@ const NotificationItem = ({
                         }}
                         style={{
                             border: "none",
-                            background: "transparent",
+                            background: "rgba(255,255,255,0.05)",
+                            borderRadius: "50%",
+                            width: "28px",
+                            height: "28px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
                             cursor: "pointer",
                             fontSize: "16px",
-                            color: "#666",
+                            color: "#94a3b8",
+                            transition: "all 0.2s"
                         }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.1)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
                     >
                         ⋮
                     </button>
@@ -134,12 +193,14 @@ const NotificationItem = ({
                             style={{
                                 position: "absolute",
                                 right: 0,
-                                top: "22px",
-                                background: "#fff",
-                                border: "1px solid #ddd",
+                                top: "34px",
+                                background: "#1e293b",
+                                border: "1px solid rgba(255, 255, 255, 0.1)",
                                 borderRadius: "8px",
-                                boxShadow: "0 6px 16px rgba(0,0,0,0.12)",
+                                boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
                                 zIndex: 100,
+                                minWidth: "120px",
+                                overflow: "hidden"
                             }}
                         >
                             <div
@@ -148,14 +209,36 @@ const NotificationItem = ({
                                     setOpenMenu(false);
                                 }}
                                 style={{
-                                    padding: "8px 12px",
+                                    padding: "10px 14px",
                                     fontSize: "12px",
+                                    fontWeight: "500",
+                                    color: "#e2e8f0",
                                     cursor: "pointer",
+                                    transition: "background 0.2s",
+                                    borderBottom: "1px solid rgba(255,255,255,0.05)"
                                 }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                             >
-                                {notification.read
-                                    ? "Mark as unread"
-                                    : "Mark as read"}
+                                {notification.read ? "Mark as unread" : "Mark as read"}
+                            </div>
+                            <div
+                                onClick={() => {
+                                    if(deleteNotification) deleteNotification(notification.id);
+                                    setOpenMenu(false);
+                                }}
+                                style={{
+                                    padding: "10px 14px",
+                                    fontSize: "12px",
+                                    fontWeight: "500",
+                                    color: "#ef4444",
+                                    cursor: "pointer",
+                                    transition: "background 0.2s"
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239, 68, 68, 0.1)"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                            >
+                                🗑️ Delete
                             </div>
                         </div>
                     )}

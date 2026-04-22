@@ -1,38 +1,25 @@
 
-import React, { useEffect, useState, useMemo } from "react";
-import socket from "../services/socket";
+import React, { useState, useMemo, useContext } from "react";
 import NotificationList from "../components/NotificationList";
+import { NotificationContext } from "../context/NotificationContext";
 
 const Dashboard = () => {
-    const [notifications, setNotifications] = useState([]);
+    // Consume global state from context
+    const {
+        notifications,
+        setNotifications,
+        dndMode,
+        setDndMode,
+        dndQueue,
+        connected
+    } = useContext(NotificationContext);
+
+    // Local UI state
     const [filter, setFilter] = useState("ALL");
     const [activeTab, setActiveTab] = useState("PRIORITY");
-    const [connected, setConnected] = useState(false);
-    const [paused, setPaused] = useState(false);
     const [selected, setSelected] = useState([]);
 
-    useEffect(() => {
-        const handleConnect = () => setConnected(true);
-        const handleDisconnect = () => setConnected(false);
-
-        const handleNotification = (data) => {
-            if (!paused) {
-                setNotifications((prev) => [data, ...prev]);
-            }
-        };
-
-        socket.on("connect", handleConnect);
-        socket.on("disconnect", handleDisconnect);
-        socket.on("notification", handleNotification);
-
-        return () => {
-            socket.off("connect", handleConnect);
-            socket.off("disconnect", handleDisconnect);
-            socket.off("notification", handleNotification);
-        };
-    }, [paused]);
-
-    // Counts
+    // Counts (include dndQueue so user knows overall stats, or just use notifications? Let's just use visible notifications for tabs)
     const counts = useMemo(() => {
         const result = { HIGH: 0, MEDIUM: 0, LOW: 0, SPAM: 0 };
         notifications.forEach((n) => {
@@ -80,7 +67,7 @@ const Dashboard = () => {
     };
 
     const toggleSelectAll = () => {
-        if (selected.length === filteredNotifications.length) {
+        if (selected.length === filteredNotifications.length && filteredNotifications.length > 0) {
             setSelected([]);
         } else {
             setSelected(filteredNotifications.map((n) => n.id));
@@ -98,49 +85,143 @@ const Dashboard = () => {
         setSelected([]);
     };
 
-    return (
-        <div style={{ background: "#f4f6f9", minHeight: "100vh", fontFamily: "Inter" }}>
+    const deleteSelected = () => {
+        setNotifications((prev) => prev.filter((n) => !selected.includes(n.id)));
+        setSelected([]);
+    };
 
-            {/* HEADER */}
+    const deleteNotification = (id) => {
+        setNotifications((prev) => prev.filter((n) => n.id !== id));
+        setSelected((prev) => prev.filter((s) => s !== id));
+    };
+
+    return (
+        <div style={{ background: "transparent", minHeight: "100vh" }}>
+
+            {/* TELEMETRY HEADER */}
             <div style={{
                 padding: "16px 30px",
-                background: "#fff",
-                borderBottom: "1px solid #eee",
+                background: "rgba(15, 23, 42, 0.8)",
+                backdropFilter: "blur(20px)",
+                borderBottom: "1px solid rgba(255,255,255,0.1)",
                 display: "flex",
                 justifyContent: "space-between",
-                alignItems: "center"
+                alignItems: "center",
+                position: "sticky",
+                top: 0,
+                zIndex: 50
             }}>
-                <h2 style={{ margin: 0 }}>🔔 Notifications</h2>
+                <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                    <h2 style={{ margin: 0, color: "#f8fafc", fontSize: "20px", fontWeight: "600", display: "flex", alignItems: "center", gap: "10px" }}>
+                        <span style={{ fontSize: "16px" }}>🔔</span>
+                        Operations Center
+                    </h2>
+                </div>
 
-                <span style={{ fontSize: "12px" }}>
-                    Status:{" "}
-                    <span style={{
-                        color: connected ? "#52c41a" : "#ff4d4f",
-                        fontWeight: "600"
-                    }}>
-                        {connected ? "Live" : "Disconnected"}
+                <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
+
+                    {/* DND Toggle Node */}
+                    <div
+                        onClick={() => setDndMode(p => !p)}
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            cursor: "pointer",
+                            padding: "6px 12px",
+                            borderRadius: "20px",
+                            background: dndMode ? "rgba(139, 92, 246, 0.2)" : "rgba(255,255,255,0.05)",
+                            border: `1px solid ${dndMode ? "rgba(139, 92, 246, 0.5)" : "rgba(255,255,255,0.1)"}`,
+                            transition: "all 0.3s"
+                        }}
+                    >
+                        <div style={{
+                            width: "10px", height: "10px", borderRadius: "50%",
+                            background: dndMode ? "#8b5cf6" : "#64748b",
+                            boxShadow: dndMode ? "0 0 8px #8b5cf6" : "none"
+                        }}></div>
+                        <span style={{ fontSize: "13px", color: dndMode ? "#c4b5fd" : "#94a3b8", fontWeight: "600" }}>
+                            {dndMode ? "DND MODE" : "FOCUS MODE"}
+                        </span>
+                    </div>
+
+                    {/* Connection Status */}
+                    <span style={{ fontSize: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{
+                            width: "8px", height: "8px", borderRadius: "50%",
+                            background: connected ? "#10b981" : "#ef4444",
+                            animation: connected ? "pulse-ring 2s infinite" : "none"
+                        }}></span>
+                        <span style={{
+                            color: connected ? "#34d399" : "#f87171",
+                            fontWeight: "600",
+                            letterSpacing: "0.5px"
+                        }}>
+                            {connected ? "SYS.ONLINE" : "OFFLINE"}
+                        </span>
                     </span>
-                </span>
+                </div>
             </div>
+
+            {/* DND BANNER */}
+            {dndMode && dndQueue.length > 0 && (
+                <div style={{
+                    margin: "24px 30px 0",
+                    padding: "16px",
+                    background: "linear-gradient(90deg, rgba(139,92,246,0.15) 0%, rgba(109,40,217,0.05) 100%)",
+                    border: "1px solid rgba(139, 92, 246, 0.3)",
+                    borderRadius: "12px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center"
+                }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <span style={{ fontSize: "20px" }}>🌙</span>
+                        <div>
+                            <div style={{ color: "#e2e8f0", fontWeight: "600", fontSize: "14px" }}>Do Not Disturb is ON</div>
+                            <div style={{ color: "#a78bfa", fontSize: "13px", marginTop: "2px" }}>
+                                {dndQueue.length} notification{dndQueue.length > 1 ? "s" : ""} held back.
+                            </div>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => setDndMode(false)}
+                        className="interactive-btn"
+                        style={{
+                            padding: "8px 16px",
+                            background: "#8b5cf6",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: "8px",
+                            fontWeight: "600",
+                            fontSize: "13px",
+                            cursor: "pointer"
+                        }}
+                    >
+                        View Now
+                    </button>
+                </div>
+            )}
 
             {/* MAIN CARD */}
             <div style={{
                 margin: "24px 30px",
-                background: "#fff",
+                background: "rgba(30, 41, 59, 0.4)",
                 borderRadius: "16px",
                 padding: "24px",
-                boxShadow: "0 10px 40px rgba(0,0,0,0.08)",
-                border: "1px solid rgba(0,0,0,0.02)"
+                boxShadow: "0 10px 40px rgba(0,0,0,0.4)",
+                border: "1px solid rgba(255,255,255,0.05)",
+                backdropFilter: "blur(10px)"
             }}>
 
                 {/* TABS */}
                 <div style={{
                     display: "flex",
-                    borderBottom: "1px solid #eee",
-                    marginBottom: "15px"
+                    borderBottom: "1px solid rgba(255,255,255,0.1)",
+                    marginBottom: "20px"
                 }}>
                     {[
-                        { key: "PRIORITY", label: "Priority" },
+                        { key: "PRIORITY", label: "Operations" },
                         { key: "SPAM", label: "Spam" }
                     ].map((tab) => (
                         <div
@@ -148,18 +229,13 @@ const Dashboard = () => {
                             className={`tab-btn ${activeTab === tab.key ? 'active' : ''}`}
                             onClick={() => setActiveTab(tab.key)}
                             style={{
-                                padding: "10px 16px",
+                                padding: "12px 20px",
                                 cursor: "pointer",
-                                borderBottom:
-                                    activeTab === tab.key
-                                        ? "3px solid #1677ff"
-                                        : "3px solid transparent",
-                                color:
-                                    activeTab === tab.key
-                                        ? "#1677ff"
-                                        : "#666",
+                                borderBottom: "3px solid transparent",
+                                color: activeTab === tab.key ? "#f8fafc" : "#64748b",
                                 fontWeight: "600",
-                                fontSize: "13px"
+                                fontSize: "14px",
+                                transition: "color 0.3s"
                             }}
                         >
                             {tab.label}
@@ -172,32 +248,33 @@ const Dashboard = () => {
                 {activeTab === "PRIORITY" && (
                     <div style={{
                         display: "flex",
-                        gap: "8px",
-                        marginBottom: "15px"
+                        gap: "10px",
+                        marginBottom: "20px"
                     }}>
-                        {["ALL", "HIGH", "MEDIUM", "LOW"].map((type) => (
-                            <button
-                                key={type}
-                                className="filter-btn interactive-btn"
-                                onClick={() => setFilter(type)}
-                                style={{
-                                    padding: "8px 16px",
-                                    borderRadius: "24px",
-                                    border: filter === type ? "none" : "1px solid #e2e8f0",
-                                    fontSize: "13px",
-                                    fontWeight: "500",
-                                    cursor: "pointer",
-                                    background:
-                                        filter === type ? "linear-gradient(135deg, #1677ff, #597ef7)" : "#fff",
-                                    color:
-                                        filter === type ? "#fff" : "#475569",
-                                    boxShadow: filter === type ? "0 4px 10px rgba(22, 119, 255, 0.2)" : "none",
-                                    transition: "all 0.3s ease"
-                                }}
-                            >
-                                {type} {type !== "ALL" && `(${counts[type]})`}
-                            </button>
-                        ))}
+                        {["ALL", "HIGH", "MEDIUM", "LOW"].map((type) => {
+                            const isActive = filter === type;
+                            return (
+                                <button
+                                    key={type}
+                                    className="interactive-btn"
+                                    onClick={() => setFilter(type)}
+                                    style={{
+                                        padding: "8px 18px",
+                                        borderRadius: "20px",
+                                        border: isActive ? "1px solid rgba(56, 189, 248, 0.5)" : "1px solid rgba(255,255,255,0.1)",
+                                        fontSize: "12px",
+                                        fontWeight: "600",
+                                        cursor: "pointer",
+                                        background: isActive ? "rgba(56, 189, 248, 0.1)" : "rgba(15, 23, 42, 0.6)",
+                                        color: isActive ? "#38bdf8" : "#94a3b8",
+                                        boxShadow: isActive ? "0 0 12px rgba(56, 189, 248, 0.2)" : "none",
+                                        letterSpacing: "0.5px"
+                                    }}
+                                >
+                                    {type} {type !== "ALL" && `(${counts[type]})`}
+                                </button>
+                            );
+                        })}
                     </div>
                 )}
 
@@ -216,37 +293,67 @@ const Dashboard = () => {
                                 filteredNotifications.length > 0
                             }
                             onChange={toggleSelectAll}
+                            style={{ accentColor: "#38bdf8", width: "16px", height: "16px", cursor: "pointer" }}
                         />
 
-                        <span style={{ fontSize: "12px", color: "#888" }}>
+                        <span style={{ fontSize: "13px", color: "#64748b", fontWeight: "500" }}>
                             {selected.length > 0
-                                ? `${selected.length} selected`
-                                : `${filteredNotifications.length} items`}
+                                ? `${selected.length} payload(s) selected`
+                                : `${filteredNotifications.length} active event(s)`}
                         </span>
                     </div>
 
-                    <div style={{ display: "flex", gap: "10px" }}>
-                        <button 
+                    <div style={{ display: "flex", gap: "12px" }}>
+                        <button
                             className="interactive-btn"
                             onClick={() => markSelected(true)}
-                            style={{ padding: "6px 14px", borderRadius: "6px", border: "1px solid #d9d9d9", background: "#fff", cursor: "pointer", fontSize: "13px", fontWeight: "500", color: "#333" }}
+                            style={{
+                                padding: "6px 16px",
+                                borderRadius: "8px",
+                                border: "1px solid rgba(255,255,255,0.1)",
+                                background: "rgba(255,255,255,0.05)",
+                                cursor: "pointer",
+                                fontSize: "13px",
+                                fontWeight: "600",
+                                color: "#cbd5e1"
+                            }}
                         >
-                            Mark read
+                            ✓ Mark read
                         </button>
-                        <button 
+                        <button
                             className="interactive-btn"
                             onClick={() => markSelected(false)}
-                            style={{ padding: "6px 14px", borderRadius: "6px", border: "1px solid #d9d9d9", background: "#fff", cursor: "pointer", fontSize: "13px", fontWeight: "500", color: "#333" }}
+                            style={{
+                                padding: "6px 16px",
+                                borderRadius: "8px",
+                                border: "1px solid rgba(255,255,255,0.1)",
+                                background: "rgba(255,255,255,0.05)",
+                                cursor: "pointer",
+                                fontSize: "13px",
+                                fontWeight: "600",
+                                color: "#cbd5e1"
+                            }}
                         >
-                            Mark unread
+                            ↺ Mark unread
                         </button>
-                        <button 
-                            className="interactive-btn"
-                            onClick={() => setPaused((p) => !p)}
-                            style={{ padding: "6px 14px", borderRadius: "6px", border: paused ? "none" : "1px solid #ff4d4f", background: paused ? "#52c41a" : "#fff", color: paused ? "#fff" : "#ff4d4f", cursor: "pointer", fontSize: "13px", fontWeight: "600", transition: "all 0.3s" }}
-                        >
-                            {paused ? "▶ Resume" : "⏸ Pause"}
-                        </button>
+                        {selected.length > 0 && (
+                            <button
+                                className="interactive-btn"
+                                onClick={deleteSelected}
+                                style={{
+                                    padding: "6px 16px",
+                                    borderRadius: "8px",
+                                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                                    background: "rgba(239, 68, 68, 0.1)",
+                                    cursor: "pointer",
+                                    fontSize: "13px",
+                                    fontWeight: "600",
+                                    color: "#ef4444"
+                                }}
+                            >
+                                Delete
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -256,6 +363,7 @@ const Dashboard = () => {
                     toggleRead={toggleRead}
                     toggleSelect={toggleSelect}
                     selected={selected}
+                    deleteNotification={deleteNotification}
                 />
             </div>
         </div>
